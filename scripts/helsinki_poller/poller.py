@@ -28,7 +28,8 @@ LOOK_AHEAD, BOARD_SIZE = int(ENV("LOOK_AHEAD_HOURS", "8")), int(ENV("BOARD_SIZE"
 GRACE_MIN = int(ENV("MISSING_GRACE_MINUTES", "10"))
 TZ = ZoneInfo("Europe/Helsinki") if hasattr(ZoneInfo, "__call__") else ZoneInfo(timedelta(hours=3))
 
-BASE_URL = "https://apigw.finavia/fi/flights/public/v0"
+BASE_URL = "https://apigw.finavia.fi/flights/public/v0"
+
 NS = "http://www.finavia.fi/FlightsService.xsd"
 
 STATUS_MAP = {
