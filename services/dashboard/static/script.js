@@ -107,6 +107,7 @@ function renderAll(payload) {
         const data = airports[code] || { flights: [], stats: {} };
         renderAirport(code, data);
     });
+    renderAlerts((payload && payload.alerts) || []);
 }
 
 function renderAirport(code, data) {
@@ -255,3 +256,37 @@ function tickClock() {
 }
 tickClock();
 setInterval(tickClock, 1000);
+
+function renderAlerts(alertsList) {
+    const container = document.getElementById("alerts-list");
+    if (!container) return;
+    if (!alertsList || alertsList.length === 0) {
+        container.innerHTML = `<div class="alerts-empty">Awaiting departures…</div>`;
+        return;
+    }
+    container.innerHTML = alertsList.map(a => renderAlertItem(a)).join("");
+}
+
+function renderAlertItem(a) {
+    const meta = AIRPORT_META[a.airport] || { tz: "UTC", city: a.airport };
+    const sched = formatTime(a.scheduled_departure, meta.tz);
+    const actual = formatTime(a.actual_departure, meta.tz);
+    const dest = a.destination_name || a.destination_iata || "—";
+    const code = a.flight_code || "—";
+    const delay = (typeof a.delay_minutes === "number") ? a.delay_minutes : null;
+    let delayBadge = "";
+    if (delay != null && delay !== 0) {
+        const cls = delay > 0 ? "delta-late" : "delta-early";
+        const sign = delay > 0 ? "+" : "−";
+        delayBadge = ` <span class="${cls}">(${sign}${Math.abs(delay)} min)</span>`;
+    }
+    return `
+        <div class="alert-row">
+            <span class="alert-airport">${escapeHtml(a.airport || "—")}</span>
+            <span class="alert-text">
+                Flight <strong>${escapeHtml(code)}</strong> to <strong>${escapeHtml(dest)}</strong>:
+                departed at <strong>${actual}</strong> (scheduled: ${sched})${delayBadge}
+            </span>
+        </div>
+    `;
+}

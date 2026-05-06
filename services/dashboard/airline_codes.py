@@ -22,6 +22,8 @@ AIRLINES: dict[str, str] = {
     "TG": "Thai Airways",
     "EW": "Eurowings",
     "EI": "Air Lingus",
+    "KM": "Malta Airlines",
+    "A9": "Georgian Airways",
 
     "BA": "British Airways",
     "IB": "Iberia",

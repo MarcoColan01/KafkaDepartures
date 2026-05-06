@@ -1,3 +1,4 @@
+
 import os
 import json
 import threading
@@ -15,16 +16,15 @@ from airline_codes import airline_name
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka-1:9093,kafka-2:9095,kafka-3:9097")
 TOPIC_TELEMETRY = os.getenv("TOPIC_TELEMETRY", "flight.telemetry")
 TOPIC_STATS = os.getenv("TOPIC_STATS", "flight.stats")
+TOPIC_ALERTS = os.getenv("TOPIC_ALERTS", "flight.alerts")
 
-GROUP_TELEMETRY = os.getenv(
-    "DASHBOARD_TELEMETRY_GROUP", f"dashboard-telemetry-{uuid.uuid4()}"
-)
-GROUP_STATS = os.getenv(
-    "DASHBOARD_STATS_GROUP", f"dashboard-stats-{uuid.uuid4()}"
-)
+GROUP_TELEMETRY = os.getenv("DASHBOARD_TELEMETRY_GROUP", f"dashboard-telemetry-{uuid.uuid4()}")
+GROUP_STATS = os.getenv("DASHBOARD_STATS_GROUP", f"dashboard-stats-{uuid.uuid4()}")
+GROUP_ALERTS = os.getenv("DASHBOARD_ALERTS_GROUP", f"dashboard-alerts-{uuid.uuid4()}")
 
 AIRPORTS = ["AMS", "HEL", "OSL"]
 BOARD_SIZE = int(os.getenv("BOARD_SIZE", "20"))
+ALERT_FEED_MAX = int(os.getenv("ALERT_FEED_MAX", "200"))   # in-memory ring cap
 
 webapp = Flask(__name__, static_folder="static", template_folder="template")
 
@@ -46,6 +46,9 @@ state = {
     }
     for code in AIRPORTS
 }
+
+
+alerts: list[dict] = []
 
 sse_clients: list[queue.Queue] = []
 sse_clients_lock = threading.Lock()
@@ -69,20 +72,17 @@ def kafka_ssl_base() -> dict:
     }
 
 
+
 def enrich_event(event: dict) -> dict:
-    """Add display-friendly fields without mutating the original."""
     enriched = dict(event)
 
-    # Airline full name
     iata = event.get("airline_iata")
     full_airline = airline_name(iata)
     if full_airline:
         enriched["airline_name_full"] = full_airline
     else:
-        # Fallback: keep whatever was already in airline_name (often the IATA code)
         enriched["airline_name_full"] = event.get("airline_name") or iata or "—"
 
-    # Destination full name + city
     dest_iata = (event.get("destination_iata") or "").upper()
     info = IATA_AIRPORTS.get(dest_iata) if dest_iata else None
     if info:
@@ -126,9 +126,28 @@ def update_stats(event: dict) -> None:
         }
 
 
+def add_alert(event: dict) -> None:
+    """Add a new notification to the in-memory feed, today only."""
+    today_utc = datetime.now(timezone.utc).date().isoformat()
+    if event.get("alert_day_utc") and event["alert_day_utc"] != today_utc:
+        return
+    # Idempotency: skip if same (airport, flight_code, scheduled) is already present
+    key = (event.get("airport"), event.get("flight_code"), event.get("scheduled_departure"))
+    with state_lock:
+        for existing in alerts:
+            ek = (existing.get("airport"), existing.get("flight_code"), existing.get("scheduled_departure"))
+            if ek == key:
+                return
+        alerts.insert(0, event)
+        # Cap memory usage
+        del alerts[ALERT_FEED_MAX:]
+
+
 def board_snapshot() -> dict:
     now_utc = datetime.now(timezone.utc)
-    out = {"airports": {}}
+    out = {"airports": {}, "alerts": []}
+    today_utc = now_utc.date().isoformat()
+
     with state_lock:
         for airport, bucket in state.items():
             flights = []
@@ -147,6 +166,12 @@ def board_snapshot() -> dict:
                 "flights": flights[:BOARD_SIZE],
                 "stats": bucket["stats"],
             }
+
+        # Alerts: filter today only, sort by actual_departure DESC (most recent first)
+        today_alerts = [a for a in alerts if a.get("alert_day_utc") == today_utc]
+        today_alerts.sort(key=lambda a: a.get("actual_departure") or "", reverse=True)
+        out["alerts"] = today_alerts
+
     return out
 
 
@@ -166,67 +191,85 @@ def broadcast_state() -> None:
 
 
 def telemetry_loop() -> None:
-    cfg = {
+    consumer = Consumer({
         **kafka_ssl_base(),
         "group.id": GROUP_TELEMETRY,
         "auto.offset.reset": "latest",
         "enable.auto.commit": True,
         "client.id": "flight-dashboard-telemetry",
-    }
-    consumer = Consumer(cfg)
+    })
     consumer.subscribe([TOPIC_TELEMETRY])
     print(f"[dashboard] telemetry consumer started, group={GROUP_TELEMETRY}", flush=True)
-
     while True:
         msg = consumer.poll(1.0)
-        if msg is None:
-            continue
+        if msg is None: continue
         if msg.error():
-            print(f"[dashboard] telemetry kafka error: {msg.error()}", flush=True)
-            continue
+            print(f"[dashboard] telemetry kafka error: {msg.error()}", flush=True); continue
         try:
             event = json.loads(msg.value().decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            print(f"[dashboard] malformed telemetry: {e}", flush=True)
-            continue
+            print(f"[dashboard] malformed telemetry: {e}", flush=True); continue
         upsert_flight(event)
         broadcast_state()
 
 
 def stats_loop() -> None:
-    cfg = {
+    consumer = Consumer({
         **kafka_ssl_base(),
         "group.id": GROUP_STATS,
         "auto.offset.reset": "latest",
         "enable.auto.commit": True,
         "client.id": "flight-dashboard-stats",
-    }
-    consumer = Consumer(cfg)
+    })
     consumer.subscribe([TOPIC_STATS])
     print(f"[dashboard] stats consumer started, group={GROUP_STATS}", flush=True)
-
     while True:
         msg = consumer.poll(1.0)
-        if msg is None:
-            continue
+        if msg is None: continue
         if msg.error():
-            print(f"[dashboard] stats kafka error: {msg.error()}", flush=True)
-            continue
+            print(f"[dashboard] stats kafka error: {msg.error()}", flush=True); continue
         try:
             event = json.loads(msg.value().decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            print(f"[dashboard] malformed stats: {e}", flush=True)
-            continue
+            print(f"[dashboard] malformed stats: {e}", flush=True); continue
         update_stats(event)
+        broadcast_state()
+
+
+def alerts_loop() -> None:
+    """
+    Reads flight.alerts from the BEGINNING (auto.offset.reset=earliest) so
+    that on dashboard boot we can rebuild today's notification feed. The
+    add_alert() function discards messages from previous days.
+    """
+    consumer = Consumer({
+        **kafka_ssl_base(),
+        "group.id": GROUP_ALERTS,
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": True,
+        "client.id": "flight-dashboard-alerts",
+    })
+    consumer.subscribe([TOPIC_ALERTS])
+    print(f"[dashboard] alerts consumer started, group={GROUP_ALERTS}", flush=True)
+    while True:
+        msg = consumer.poll(1.0)
+        if msg is None: continue
+        if msg.error():
+            print(f"[dashboard] alerts kafka error: {msg.error()}", flush=True); continue
+        try:
+            event = json.loads(msg.value().decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            print(f"[dashboard] malformed alert: {e}", flush=True); continue
+        add_alert(event)
         broadcast_state()
 
 
 def start_kafka_threads() -> None:
     global started
-    if started:
-        return
+    if started: return
     threading.Thread(target=telemetry_loop, daemon=True).start()
     threading.Thread(target=stats_loop, daemon=True).start()
+    threading.Thread(target=alerts_loop, daemon=True).start()
     started = True
 
 
@@ -235,15 +278,10 @@ def before():
     start_kafka_threads()
 
 
+
 @webapp.get("/healthcheck")
 def health():
-    return {
-        "ok": True,
-        "bootstrap": BOOTSTRAP,
-        "topics": {"telemetry": TOPIC_TELEMETRY, "stats": TOPIC_STATS},
-        "groups": {"telemetry": GROUP_TELEMETRY, "stats": GROUP_STATS},
-        "airports": AIRPORTS,
-    }
+    return {"ok": True}
 
 
 @webapp.get("/")
