@@ -52,6 +52,16 @@
                 </div>
             </div>
 
+            <div class="alerts-feed">
+                <div class="alerts-head">
+                    <span class="alerts-title">DEPARTURE FEED</span>
+                    <span class="alerts-sub">TODAY · NEWEST FIRST</span>
+                </div>
+                <div class="alerts-list" id="alerts-list-{{ airport }}">
+                    <div class="alerts-empty">Awaiting departures…</div>
+                </div>
+            </div>
+
             <table class="flights">
                 <thead>
                     <tr>
@@ -70,17 +80,7 @@
                 </tbody>
             </table>
         </section>
-        {% endfor %} 
+        {% endfor %}
     </main>
-
-    <section class = "alerts-feed">
-        <div class = "alerts-head">
-            <span class = "alerts-title">DEPARTURE FEED</span>
-            <span class = "alerts-sub">TODAY · NEWEST FIRST</span>
-        </div>
-        <div class = "alerts-list" id = "alerts-list">
-            <div class = "alerts-empty">Awaiting departures...</div>
-        </div>
-    </section>
 </body>
 </html>

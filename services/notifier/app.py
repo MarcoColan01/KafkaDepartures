@@ -4,6 +4,7 @@ import logging
 import signal
 import time
 from datetime import datetime, timezone, time as dtime
+import airportsdata
 
 from confluent_kafka import Consumer, Producer, KafkaException, TopicPartition
 
@@ -16,9 +17,13 @@ GROUP_ID = os.getenv("GROUP_ID", "notifier-group")
 if not GROUP_ID or not GROUP_ID.strip():
     raise RuntimeError("GROUP_ID env var is empty or not set.")
 
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("notifier")
 
+IATA_AIRPORTS = airportsdata.load("IATA")
+log.info("airportsdata loaded: %d entries", len(IATA_AIRPORTS))
 
 def kafka_ssl_base() -> dict:
     return {
@@ -94,12 +99,17 @@ def build_notification(event: dict) -> dict | None:
     if not sched or not actual:
         return None
 
-    destination = (
-        event.get("destination_name")
-        or event.get("destination_city")
-        or event.get("destination_iata")
-        or "—"
-    )
+    dest_iata = (event.get("destination_iata") or "").upper()
+    info = IATA_AIRPORTS.get(dest_iata) if dest_iata else None
+    if info and info.get("city"):
+        destination = info["city"]
+    else:
+        destination = (
+            event.get("destination_city")
+            or event.get("destination_name")
+            or dest_iata
+            or "—"
+        )
 
     text = (
         f"Flight {flight_code} to {destination}: "

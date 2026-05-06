@@ -103,11 +103,19 @@ function snapshotFields(f) {
 function renderAll(payload) {
     lastPayload = payload;
     const airports = (payload && payload.airports) || {};
+    const allAlerts = (payload && payload.alerts) || [];
+
+    const alertsByAirport = {};
+    Object.keys(AIRPORT_META).forEach(code => { alertsByAirport[code] = []; });
+    allAlerts.forEach(a => {
+        if (alertsByAirport[a.airport]) alertsByAirport[a.airport].push(a);
+    });
+
     Object.keys(AIRPORT_META).forEach(code => {
         const data = airports[code] || { flights: [], stats: {} };
         renderAirport(code, data);
+        renderAlerts(code, alertsByAirport[code]);
     });
-    renderAlerts((payload && payload.alerts) || []);
 }
 
 function renderAirport(code, data) {
@@ -257,8 +265,8 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 1000);
 
-function renderAlerts(alertsList) {
-    const container = document.getElementById("alerts-list");
+function renderAlerts(airportCode, alertsList) {
+    const container = document.getElementById(`alerts-list-${airportCode}`);
     if (!container) return;
     if (!alertsList || alertsList.length === 0) {
         container.innerHTML = `<div class="alerts-empty">Awaiting departures…</div>`;
@@ -268,7 +276,7 @@ function renderAlerts(alertsList) {
 }
 
 function renderAlertItem(a) {
-    const meta = AIRPORT_META[a.airport] || { tz: "UTC", city: a.airport };
+    const meta = AIRPORT_META[a.airport] || { tz: "UTC" };
     const sched = formatTime(a.scheduled_departure, meta.tz);
     const actual = formatTime(a.actual_departure, meta.tz);
     const dest = a.destination_name || a.destination_iata || "—";
@@ -282,7 +290,6 @@ function renderAlertItem(a) {
     }
     return `
         <div class="alert-row">
-            <span class="alert-airport">${escapeHtml(a.airport || "—")}</span>
             <span class="alert-text">
                 Flight <strong>${escapeHtml(code)}</strong> to <strong>${escapeHtml(dest)}</strong>:
                 departed at <strong>${actual}</strong> (scheduled: ${sched})${delayBadge}

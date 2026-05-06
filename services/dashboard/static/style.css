@@ -282,43 +282,44 @@ body {
 }
 
 /* ---------- Alerts feed ---------- */
+/* ---------- Alerts feed (per-airport, inside each board) ---------- */
 .alerts-feed {
-    margin: 0 2rem 2.5rem 2rem;
-    background: var(--panel-bg);
+    margin: 0 0 1rem 0;
+    padding: 0.7rem 0.9rem;
+    background: rgba(56, 189, 248, 0.04);
     border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    padding: 1.1rem 1.25rem;
+    border-radius: 8px;
 }
 
 .alerts-head {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 0.8rem;
-    padding-bottom: 0.6rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.4rem;
     border-bottom: 1px solid var(--panel-border);
 }
 
 .alerts-title {
-    font-size: 0.95rem;
+    font-size: 0.7rem;
     font-weight: 600;
     color: var(--text-main);
-    letter-spacing: 0.16em;
+    letter-spacing: 0.18em;
 }
 
 .alerts-sub {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: var(--text-main);
     letter-spacing: 0.18em;
 }
 
 .alerts-list {
-    max-height: 9.5rem;
+    max-height: 7rem;
     overflow-y: auto;
-    padding-right: 0.5rem;
+    padding-right: 0.4rem;
 }
 
-.alerts-list::-webkit-scrollbar { width: 6px; }
+.alerts-list::-webkit-scrollbar { width: 5px; }
 .alerts-list::-webkit-scrollbar-thumb {
     background: var(--panel-border);
     border-radius: 3px;
@@ -326,22 +327,12 @@ body {
 .alerts-list::-webkit-scrollbar-track { background: transparent; }
 
 .alert-row {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-    padding: 0.7rem 0.4rem;
+    padding: 0.45rem 0.2rem;
     border-bottom: 1px solid rgba(24, 35, 62, 0.5);
-    font-size: 0.82rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
 }
 .alert-row:last-child { border-bottom: none; }
-
-.alert-airport {
-    flex-shrink: 0;
-    width: 42px;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: 0.06em;
-}
 
 .alert-text {
     color: var(--text-main);
@@ -355,5 +346,6 @@ body {
 .alerts-empty {
     text-align: center;
     color: var(--text-main);
-    padding: 1.5rem 0.4rem;
+    padding: 1rem 0.4rem;
+    font-size: 0.72rem;
 }
