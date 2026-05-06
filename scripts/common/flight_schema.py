@@ -5,7 +5,7 @@ Canonical flight event schema, shared by all pollers.
 from dataclasses import dataclass, asdict, field
 from typing import Any, Optional, Literal
 
-Airport = Literal["AMS", "LHR", "MUC", "HEL", "OSL"]
+Airport = Literal["AMS", "HEL", "OSL"]
 EventType = Literal["UPSERT", "DELETE"]
 
 FlightStatus = Literal[

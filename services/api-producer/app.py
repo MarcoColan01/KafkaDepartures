@@ -24,7 +24,7 @@ log = logging.getLogger("api-producer")
 
 app = FastAPI(title="Flight Flow API Producer")
 
-Airport = Literal["AMS", "LHR", "MUC"]
+Airport = Literal["AMS", "HEL", "OSL"]
 FlightStatus = Literal[
     "SCHEDULED", "BOARDING", "LAST_CALL", "GATE_OPEN", "GATE_CLOSED",
     "DEPARTED", "DELAYED", "CANCELLED", "DIVERTED", "UNKNOWN",
