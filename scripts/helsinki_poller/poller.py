@@ -1,3 +1,5 @@
+#HELSINKI POLLER
+
 import logging, os, sys, time
 from dataclasses import fields, is_dataclass
 from datetime import datetime, timedelta, timezone
