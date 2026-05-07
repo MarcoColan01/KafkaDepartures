@@ -1,0 +1,227 @@
+import os, logging, sys, time
+from dataclasses import fields, is_dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path 
+import xml.etree.ElementTree as ET 
+
+import requests
+from dotenv import load_dotenv
+
+try: from zoneinfo import ZoneInfo
+except ImportError: from datetime import timezone as ZoneInfo
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+from common.flight_schema import FlightEvent
+
+load_dotenv(HERE.parent.parent / ".env")
+ENV = lambda k, d=None: os.getenv(k,d)
+
+API_URL, POLL_INT = ENV("API_PRODUCER_URL", "http://127.0.0.1:8000/flight"), int(ENV("POLL_INTERVAL", "60"))
+LOOK_AHEAD, BOARD_SIZE = int(ENV("LOOK_AHEAD_HOURS", "8")), int(ENV("BOARD_SIZE", "20"))
+GRACE_MIN = int(ENV("MISSING_GRACE_MINUTES", "10"))
+TZ = ZoneInfo("Europe/Oslo") if hasattr(ZoneInfo, "__call__") else ZoneInfo(timedelta(hours=2))
+
+BASE_URL = "https://asrv.avinor.no/XmlFeed/v1.0"
+
+
+STATUS_MAP = {
+    "N": "SCHEDULED",
+    "E": "DELAYED",
+    "D": "DEPARTED",
+    "C": "CANCELLED",
+}
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+log = logging.getLogger("oslo-poller")
+
+def get_text(el, tag: str) -> str:
+    """Read text of a child tag. Empty string if missing or empty."""
+    child = el.find(tag)
+    return child.text.strip() if child is not None and child.text else ""
+
+def dt_parse(val):
+    """Parse Avinor ISO timestamp ('Z' suffix = UTC), return aware datetime in TZ_OSL."""
+    if not val:
+        return None
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S.%f%z",
+        "%Y-%m-%dT%H:%M:%S%z",
+    ):
+        try:
+            dt = datetime.strptime(val, fmt)
+            return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).astimezone(TZ)
+        except ValueError:
+            continue
+    return None
+
+def now():
+    return datetime.now(TZ).replace(microsecond=0)
+
+def fetch_flights():
+    """One GET retrieves all departures of the time window from OSL."""
+    params = {
+        "airport": "OSL",
+        "direction": "D",
+        "TImeFrom": 1,
+        "TimeTo": LOOK_AHEAD,
+    }
+
+    try:
+        res = requests.get(BASE_URL, params=params, timeout=20)
+    except requests.RequestException as e:
+        log.error("Avinor request failed: %s", e)
+        return []
+    
+    if res.status_code == 429:
+        log.warning("Avinor rate limit hit")
+        time.sleep(30)
+        return []
+    if res.status_code >= 400:
+        log.error("Avinor API error %d: %s", res.status_code, res.text[:200])
+        return []
+    
+    try:
+        root = ET.fromstring(res.content)
+    except ET.ParseError as e:
+        log.error("Avinor reponse not valid XML: %s", e)
+        return []
+    
+    return [el for el in root.iter() if el.tag == "flight"]
+
+def parse_flight(raw):
+    """Convert one Avinor <flight> element into a FlightEvent. Returns None on filtering."""
+    code = get_text(raw, "flight_id")
+    if not code:
+        return None
+
+    sched = dt_parse(get_text(raw, "schedule_time"))
+    if not sched:
+        return None
+
+    status_el = raw.find("status")
+    status_code = ""
+    status_time = ""
+    if status_el is not None:
+        status_code = (status_el.get("code") or "").upper()
+        status_time = status_el.get("time") or ""
+
+    status_dt = dt_parse(status_time) if status_time else None
+
+    actual = status_dt if  status_code == "D" else None
+    estimated = status_dt if status_code == "E" else None 
+    best_est = actual or estimated
+
+    status = STATUS_MAP.get(status_code) if status_code else None
+    if status is None:
+        if actual:
+            status = "DEPARTED"
+        elif best_est and best_est > sched:
+            status = "DELAYED"
+        else:
+            status = "SCHEDULED"
+    
+    airline_iata = get_text(raw, "airline").upper()
+    if not airline_iata and len(code) >= 2 and code[:2].isalpha():
+        airline_iata = code[:2].upper()
+    
+    dest_iata = get_text(raw, "airport")
+    dest_name = ""
+
+    gate = get_text(raw, "gate") or None
+    aircraft = None
+
+    delay = int((best_est - sched).total_seconds() / 60) if best_est else None
+
+    kw = dict(
+        airport="OSL",
+        flight_code=code,
+        airline_iata=airline_iata,
+        airline_name=airline_iata,
+        scheduled_departure=sched.isoformat("T", "seconds"),
+        estimated_departure=best_est.isoformat("T", "seconds") if best_est else None,
+        actual_departure=actual.isoformat("T", "seconds") if actual else None,
+        delay_minutes=delay,
+        gate=gate,
+        terminal=None,
+        destination_iata=dest_iata,
+        destination_name=dest_name,
+        service_type="J",
+        status=status,
+        aircraft_type=aircraft,
+        is_codeshare=False,
+        is_cargo=False,
+    )
+
+    ev = FlightEvent(**{k: v for k,v in kw.items() if k in {f.name for f in fields (FlightEvent)}} if is_dataclass(FlightEvent) else kw)
+    for k,v in kw.items():
+        setattr(ev,k,v)
+    return ev
+
+
+def run():
+    log.info(f"Starting Oslo poller. API: {API_URL}")
+    tracked = {}
+
+    while True:
+        t0, ref_now = time.time(), now()
+        horizon = ref_now + timedelta(hours=LOOK_AHEAD)
+        metrics = dict(sent=0, fail=0, deleted=0, updated=0, added=0)
+
+        cands = {}
+        for raw in fetch_flights():
+            ev = parse_flight(raw)
+            if not ev:
+                continue
+            sched_dt = dt_parse(ev.scheduled_departure)
+            if sched_dt is None or sched_dt < ref_now or sched_dt > horizon:
+                continue
+            cands[(ev.flight_code, ev.scheduled_departure)] = ev
+        
+        consider = []
+        for k, prev in list(tracked.items()):
+            curr = cands.get(k)
+            if not curr and dt_parse(prev.scheduled_departure) < ref_now - timedelta(minutes=GRACE_MIN):
+                prev.status, prev.event_type = "DEPARTED", "DELETE"
+                prev.observed_at_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+                consider.append(prev); del tracked[k]; metrics["deleted"] += 1
+            elif curr:
+                if getattr(curr, "status", None) == "DEPARTED" or (curr.actual_departure and dt_parse(curr.actual_departure) <= ref_now):
+                    curr.status, curr.event_type = "DEPARTED", "DELETE"
+                    curr.observed_at_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+                    consider.append(curr); del tracked[k]; metrics["deleted"] += 1
+                else:
+                    curr.event_type = "UPSERT"; tracked[k] = curr; consider.append(curr); metrics["updated"] += 1
+        
+        for k,ev in sorted(cands.items(), key=lambda x: dt_parse(x[1].scheduled_departure)):
+            if len(tracked) >= BOARD_SIZE: break
+            if k not in tracked and dt_parse(ev.scheduled_departure) >= ref_now and getattr(ev, "status", None) != "DEPARTED":
+                ev.event_type = "UPSERT"; tracked[k] = ev; consider.append(ev); metrics["added"] += 1
+            
+        for ev in consider:
+            pld = ev.to_dict()
+            pld["event_type"] = getattr(ev, "event_type", "UPSERT")
+            if hasattr(ev, "observed_at_utc"):
+                pld["observed_at_utc"] = ev.observed_at_utc
+            try:
+                r = requests.post(API_URL, json=pld, timeout=5)
+                if r.status_code == 200:
+                    metrics["sent"] += 1
+                else:
+                    metrics["fail"] += 1
+                    if metrics["fail"] <= 2:
+                        log.warning("API-producer rejected %s: HTTP %d %s",
+                                    ev.flight_code, r.status_code, r.text[:200])
+            except requests.RequestException:
+                metrics["fail"] += 1
+        
+        el = time.time() - t0
+        log.info(f"Cycle {el:.1f}s | trk:{len(tracked)} " + " ".join(f"{k}:{v}" for k,v in metrics.items()))
+        time.sleep(max(5, POLL_INT- int(el)))
+
+if __name__ == "__main__":
+    try:run()
+    except KeyboardInterrupt: log.info("Stopped by user")
+
+

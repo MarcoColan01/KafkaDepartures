@@ -33,8 +33,8 @@ import requests
 BASE_URL    = "https://asrv.avinor.no/XmlFeed/v1.0"
 AIRPORT     = "OSL"
 DIRECTION   = "D"
-WINDOW_FROM = (16, 0)   # ora locale Oslo
-WINDOW_TO   = (17, 0)
+WINDOW_FROM = (11, 0)   # ora locale Oslo
+WINDOW_TO   = (12, 0)
 TIME_FROM   = 12        # ore indietro (relativo a ora corrente)
 TIME_TO     = 12        # ore avanti
 

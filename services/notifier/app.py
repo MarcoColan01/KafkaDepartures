@@ -88,6 +88,38 @@ def resolve_actual_departure_iso(event: dict) -> str | None:
     return event.get("scheduled_departure")
 
 
+def _compute_delay_minutes(event: dict) -> int | None:
+    """
+    Same cascade as stats-aggregator:
+      1. delay_minutes precomputed by poller
+      2. actual_departure - scheduled
+      3. estimated_departure - scheduled
+      4. observed_at_utc - scheduled
+    """
+    delay = event.get("delay_minutes")
+    if isinstance(delay, (int, float)):
+        return int(delay)
+
+    sched = event.get("scheduled_departure")
+    if not sched:
+        return None
+    try:
+        sched_dt = datetime.fromisoformat(sched.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    for field in ("actual_departure", "estimated_departure", "observed_at_utc"):
+        val = event.get(field)
+        if not val:
+            continue
+        try:
+            ref_dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+            return int((ref_dt - sched_dt).total_seconds() / 60)
+        except ValueError:
+            continue
+    return None
+
+
 def build_notification(event: dict) -> dict | None:
     """Produce a notification dict ready to be published on flight.alerts."""
     flight_code = event.get("flight_code")
@@ -116,6 +148,8 @@ def build_notification(event: dict) -> dict | None:
         f"departed at {actual} (scheduled: {sched})"
     )
 
+    delay = _compute_delay_minutes(event)
+
     return {
         "airport": event.get("airport"),
         "flight_code": flight_code,
@@ -123,9 +157,8 @@ def build_notification(event: dict) -> dict | None:
         "destination_name": destination,
         "scheduled_departure": sched,
         "actual_departure": actual,
-        "delay_minutes": event.get("delay_minutes"),
+        "delay_minutes": delay,
         "text": text,
-        # Day key for client-side filtering of yesterday's notifications
         "alert_day_utc": datetime.now(timezone.utc).date().isoformat(),
         "ts": time.time(),
     }
