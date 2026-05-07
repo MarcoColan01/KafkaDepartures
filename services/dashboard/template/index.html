@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aeronode / Departures Inspection</title>
+    <title>KafkaDepartures / Live Flights Departures</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </head>
@@ -12,8 +12,8 @@
         <div class="brand">
             <div class="brand-icon">✈</div>
             <div class="brand-text">
-                <div class="brand-title">AERONODE / Departures Inspection</div>
-                <div class="brand-subtitle">MULTI-HUB LIVE BOARD &nbsp;·&nbsp; AMS &nbsp;·&nbsp; HEL &nbsp;·&nbsp; OSL</div>
+                <div class="brand-title">KafkaDepartures / Live Flights Departures</div>
+  <!--          <div class="brand-subtitle">MULTI-HUB LIVE BOARD &nbsp;·&nbsp; AMS &nbsp;·&nbsp; HEL &nbsp;·&nbsp; OSL</div> -->
             </div>
         </div>
         <div class="clock">
@@ -32,7 +32,7 @@
                     <span class="airport-full" id="full-{{ airport }}">—</span>
                 </div>
                 <div class="board-clock">
-                    <span class="live-tag">● LIVE</span>
+                    <span class="live-tag">● TIME AT <span id="meta-city-{{ airport }}">—</span></span>
                     <span class="board-time" id="time-{{ airport }}">—</span>
                 </div>
             </div>
@@ -41,11 +41,11 @@
 
             <div class="stats-row">
                 <div class="stat">
-                    <div class="stat-label">✈ DEPARTED TODAY</div>
+                    <div class="stat-label">✈ DEPARTED FLIGHTS</div>
                     <div class="stat-value" id="stat-departed-{{ airport }}">—</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-label">⌛ AVG DAILY DELAY</div>
+                    <div class="stat-label">⌛ AVERAGE DELAY</div>
                     <div class="stat-value">
                         <span id="stat-delay-{{ airport }}">—</span><span class="stat-unit">min</span>
                     </div>
@@ -55,7 +55,7 @@
             <div class="alerts-feed">
                 <div class="alerts-head">
                     <span class="alerts-title">DEPARTURE FEED</span>
-                    <span class="alerts-sub">TODAY · NEWEST FIRST</span>
+                    <span class="alerts-sub">NEWEST FIRST</span>
                 </div>
                 <div class="alerts-list" id="alerts-list-{{ airport }}">
                     <div class="alerts-empty">Awaiting departures…</div>
@@ -68,8 +68,8 @@
                         <th>AIRLINE</th>
                         <th>FLIGHT</th>
                         <th>DESTINATION</th>
-                        <th>SCHED</th>
-                        <th>EST</th>
+                        <th>SCHEDULED</th>
+                        <th>ESTIMATED</th>
                         <th>GATE</th>
                         <th>INFO</th>
                         <th></th>
