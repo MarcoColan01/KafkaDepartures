@@ -113,6 +113,7 @@ def parse_flight(raw):
     estimated = status_dt if status_code == "E" else None 
     best_est = actual or estimated
 
+    delay = int((best_est - sched).total_seconds() / 60) if best_est else None
     status = STATUS_MAP.get(status_code) if status_code else None
     if status is None:
         if actual:
@@ -121,6 +122,8 @@ def parse_flight(raw):
             status = "DELAYED"
         else:
             status = "SCHEDULED"
+    if status == "DELAYED" and delay is not None and delay <= 0:
+        status = "SCHEDULED"
     
     airline_iata = get_text(raw, "airline").upper()
     if not airline_iata and len(code) >= 2 and code[:2].isalpha():
@@ -132,7 +135,7 @@ def parse_flight(raw):
     gate = get_text(raw, "gate") or None
     aircraft = None
 
-    delay = int((best_est - sched).total_seconds() / 60) if best_est else None
+    #delay = int((best_est - sched).total_seconds() / 60) if best_est else None
 
     kw = dict(
         airport="OSL",

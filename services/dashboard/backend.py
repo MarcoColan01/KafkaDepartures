@@ -108,7 +108,7 @@ def upsert_flight(event: dict) -> None:
     enriched = enrich_event(event)
 
     with state_lock:
-        if event.get("event_type") == "DELETE":
+        if event.get("event_type") == "DELETE" or event.get("event_type") == "CANCELLED":
             state[airport]["flights"].pop(key, None)
         else:
             state[airport]["flights"][key] = enriched

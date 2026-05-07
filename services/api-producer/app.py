@@ -10,11 +10,12 @@ import time
 import logging
 from datetime import datetime 
 from typing import Any, Optional, Literal
+import threading
 
 
 from fastapi import FastAPI, HTTPException 
 from pydantic import BaseModel, Field
-from confluent_kafka import Producer, KafkaError
+from confluent_kafka import Producer, KafkaError, KafkaException
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka-1:9093,kafka-2:9095,kafka-3:9097")
 TOPIC = os.getenv("TOPIC_EVENTS", "flight.telemetry")
@@ -81,7 +82,61 @@ def kafka_ssl_base() -> dict:
     }
     return cfg
 
-producer = Producer(kafka_ssl_base())
+class ResilientProducer:
+    def __init__(self, config: dict):
+        self._config = config
+        self._lock = threading.Lock()
+        self._producer = Producer(config)
+
+    def _reinit(self):
+        log.warning("Producer in fatal state, recreating it")
+        try:
+            self._producer.flush(timeout=2)
+        except Exception:
+            pass
+        self._producer = Producer(self._config)
+        log.info("Producer recreated")
+
+    def produce(self, *args, **kwargs):
+        with self._lock:
+            try:
+                self._producer.produce(*args, **kwargs)
+            except KafkaException as e:
+                # Detect fatal state: re-init and retry once
+                err = e.args[0] if e.args else None
+                fatal = err is not None and (
+                    getattr(err, "fatal", lambda: False)()
+                    or err.code() == KafkaError._FATAL
+                )
+                if fatal:
+                    self._reinit()
+                    self._producer.produce(*args, **kwargs)
+                else:
+                    raise
+
+    def poll(self, timeout):
+        with self._lock:
+            try:
+                self._producer.poll(timeout)
+            except KafkaException as e:
+                err = e.args[0] if e.args else None
+                fatal = err is not None and (
+                    getattr(err, "fatal", lambda: False)()
+                    or err.code() == KafkaError._FATAL
+                )
+                if fatal:
+                    self._reinit()
+
+    def flush(self, timeout):
+        with self._lock:
+            try:
+                return self._producer.flush(timeout)
+            except KafkaException:
+                self._reinit()
+                return 0
+
+
+producer = ResilientProducer(kafka_ssl_base())
 
 def delivery_report(err, msg):
     if err is not None:
