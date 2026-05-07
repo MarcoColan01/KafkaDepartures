@@ -132,11 +132,11 @@ def parse_flight(raw):
     status = STATUS_MAP.get(prt) if prt else None
     if status is None:
         if actual:
-            status = "DEPARTED."
+            status = "DEPARTED"
         elif best_est and best_est > sched:
-            status = "DELAYED."
+            status = "DELAYED"
         else:
-            status = "SCHEDULED."
+            status = "SCHEDULED"
     
     airline_iata = code[:2].upper() if len(code) >= 2 and code[:2].isalpha() else ""
     dest_iata = get_text(raw, "route_1")
