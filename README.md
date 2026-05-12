@@ -92,6 +92,9 @@ cd cloud-computing-project
 
 Linux / macOS:
 ```bash
+sudo apt update
+sudo apt install -y openssl default-jre
+
 cd security
 chmod +x generate_certs.sh
 ./generate_certs.sh
@@ -100,7 +103,14 @@ cd ..
 
 Windows (PowerShell, requires WSL (reccomended) or Git Bash):
 ```powershell
+sudo apt update
+sudo apt install -y openssl default-jre
 cd security
+
+sudo apt update
+sudo apt install dos2unix
+dos2unix generate_certs.sh
+
 bash generate_certs.sh
 cd ..
 ```
