@@ -45,6 +45,7 @@ Report (in PDF format) describing the full design: `report.pdf`.
 - Self-signed CA `FlightFlowCA` and mTLS on all listeners
 
 ## Project structure
+```text
 cloud-computing-project/
 ├── 📁 scripts/                       # Host-side adapters (one venv each)
 │   ├── 📁 common/                    # Shared FlightEvent dataclass
@@ -63,6 +64,7 @@ cloud-computing-project/
 ├── 📄 .env.example                   # Environment template
 ├── 📄 report.pdf                     # Full project report
 └── 📄 README.md                      # This file
+```
 
 ## Getting started
 ### Prerequisites
