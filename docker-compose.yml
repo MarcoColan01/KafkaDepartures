@@ -172,7 +172,7 @@ services:
       TOPIC_TELEMETRY: flight.telemetry
       TOPIC_STATS: flight.stats
       GROUP_ID: stats-aggregator-group
-      PUBLISH_INTERVAL_SEC: 10
+      PUBLISH_INTERVAL_SEC: 1
       KAFKA_SECURITY_PROTOCOL: SSL
       KAFKA_SSL_CA_LOCATION: /app/security/ca.crt
       KAFKA_SSL_CERTIFICATE_LOCATION: /app/security/client-creds/kafka.client.certificate.pem
