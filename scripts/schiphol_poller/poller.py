@@ -19,7 +19,7 @@ ENV = lambda k, d=None: os.getenv(k, d)
 if not (APP_ID := ENV("SCHIPHOL_APP_ID")) or not (APP_KEY := ENV("SCHIPHOL_APP_KEY")):
     sys.exit("ERROR: SCHIPHOL_APP_KEY/ID missing")
 
-API_URL, POLL_INT = ENV("API_PRODUCER_URL", "http://127.0.0.1:8000/flight"), int(ENV("POLL_INTERVAL", "60"))
+API_URL, POLL_INT = ENV("API_PRODUCER_URL", "http://127.0.0.1:8000/flight"), int(ENV("POLL_INTERVAL", "30"))
 LOOK_AHEAD, MAX_PAGES, BOARD_SIZE = int(ENV("LOOK_AHEAD_HOURS", "8")), int(ENV("MAX_PAGES", "10")), int(ENV("BOARD_SIZE", "20"))
 GRACE_MIN = int(ENV("MISSING_GRACE_MINUTES", "10"))
 TZ = ZoneInfo("Europe/Amsterdam") if hasattr(ZoneInfo, "__call__") else ZoneInfo(timedelta(hours=2))

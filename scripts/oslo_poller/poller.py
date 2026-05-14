@@ -17,7 +17,7 @@ from common.flight_schema import FlightEvent
 load_dotenv(HERE.parent.parent / ".env")
 ENV = lambda k, d=None: os.getenv(k,d)
 
-API_URL, POLL_INT = ENV("API_PRODUCER_URL", "http://127.0.0.1:8000/flight"), int(ENV("POLL_INTERVAL", "60"))
+API_URL, POLL_INT = ENV("API_PRODUCER_URL", "http://127.0.0.1:8000/flight"), int(ENV("POLL_INTERVAL", "30"))
 LOOK_AHEAD, BOARD_SIZE = int(ENV("LOOK_AHEAD_HOURS", "8")), int(ENV("BOARD_SIZE", "20"))
 GRACE_MIN = int(ENV("MISSING_GRACE_MINUTES", "10"))
 TZ = ZoneInfo("Europe/Oslo") if hasattr(ZoneInfo, "__call__") else ZoneInfo(timedelta(hours=2))

@@ -30,6 +30,7 @@ AIRLINES: dict[str, str] = {
     "WF": "Widerøe",
     "DX": "DAT Danish Air Transport",
     "D8": "Norwegian Air Sweden",
+    "FB": "Bulgaria Air",
 
     "BA": "British Airways",
     "IB": "Iberia",
