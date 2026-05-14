@@ -31,6 +31,8 @@ AIRLINES: dict[str, str] = {
     "DX": "DAT Danish Air Transport",
     "D8": "Norwegian Air Sweden",
     "FB": "Bulgaria Air",
+    "UX": "Air Europa",
+    "VL": "Lufhtansa City",
 
     "BA": "British Airways",
     "IB": "Iberia",
