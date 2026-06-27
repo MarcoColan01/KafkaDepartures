@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from confluent_kafka import Producer, KafkaError, KafkaException
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka-1:9093,kafka-2:9095,kafka-3:9097")
-TOPIC = os.getenv("TOPIC_EVENTS", "flight.telemetry")
+TOPIC = os.getenv("TOPIC_TELEMETRY", "flight.departures")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("api-producer")
