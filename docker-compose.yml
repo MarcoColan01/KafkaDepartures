@@ -149,7 +149,7 @@ services:
       kafka-3: { condition: service_healthy }
     environment:
       KAFKA_BOOTSTRAP: kafka-1:9093,kafka-2:9095,kafka-3:9097
-      TOPIC_EVENTS: flight.telemetry
+      TOPIC_TELEMETRY: flight.departures
       KAFKA_SECURITY_PROTOCOL: SSL
       KAFKA_SSL_CA_LOCATION: /app/security/ca.crt
       KAFKA_SSL_CERTIFICATE_LOCATION: /app/security/client-creds/kafka.client.certificate.pem
@@ -169,8 +169,8 @@ services:
       kafka-3: { condition: service_healthy }
     environment:
       KAFKA_BOOTSTRAP: kafka-1:9093,kafka-2:9095,kafka-3:9097
-      TOPIC_TELEMETRY: flight.telemetry
-      TOPIC_STATS: flight.stats
+      TOPIC_TELEMETRY: flight.departures           
+      TOPIC_STATS: flight.statistics
       GROUP_ID: stats-aggregator-group
       PUBLISH_INTERVAL_SEC: 1
       KAFKA_SECURITY_PROTOCOL: SSL
@@ -192,8 +192,8 @@ services:
       kafka-3: { condition: service_healthy }
     environment:
       KAFKA_BOOTSTRAP: kafka-1:9093,kafka-2:9095,kafka-3:9097
-      TOPIC_TELEMETRY: flight.telemetry
-      TOPIC_ALERTS: flight.alerts
+      TOPIC_TELEMETRY: flight.departures           
+      TOPIC_ALERTS: flight.departed_flights
       GROUP_ID: notifier-group
       KAFKA_SECURITY_PROTOCOL: SSL
       KAFKA_SSL_CA_LOCATION: /app/security/ca.crt
@@ -222,8 +222,9 @@ services:
       kafka-3: { condition: service_healthy }
     environment:
       KAFKA_BOOTSTRAP: kafka-1:9093,kafka-2:9095,kafka-3:9097
-      TOPIC_TELEMETRY: flight.telemetry
-      TOPIC_STATS: flight.stats
+      TOPIC_TELEMETRY: flight.departures           
+      TOPIC_STATS: flight.statistics               
+      TOPIC_ALERTS: flight.departed_flights
       KAFKA_SECURITY_PROTOCOL: SSL
       KAFKA_SSL_CA_LOCATION: /app/security/ca.crt
       KAFKA_SSL_CERTIFICATE_LOCATION: /app/security/client-creds/kafka.client.certificate.pem
@@ -232,6 +233,66 @@ services:
       - ./security:/app/security:ro
     networks:
       - flight-net
+  
+  
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: flight-kafka-init
+    depends_on:
+      kafka-1: { condition: service_healthy }
+      kafka-2: { condition: service_healthy }
+      kafka-3: { condition: service_healthy }
+    volumes:
+      - ./security:/etc/kafka/secrets:ro
+    environment:
+      KAFKA_SSL_PASSWORD: ${KAFKA_SSL_PASSWORD}
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+
+        echo "Waiting for brokers to be ready..."
+        sleep 5
+
+        cat > /tmp/client.properties <<EOF
+        security.protocol=SSL
+        ssl.truststore.location=/etc/kafka/secrets/kafka-1-creds/kafka.kafka-1.truststore.pkcs12
+        ssl.truststore.password=$${KAFKA_SSL_PASSWORD}
+        ssl.truststore.type=PKCS12
+        ssl.keystore.location=/etc/kafka/secrets/kafka-1-creds/kafka.kafka-1.keystore.pkcs12
+        ssl.keystore.password=$${KAFKA_SSL_PASSWORD}
+        ssl.keystore.type=PKCS12
+        ssl.key.password=$${KAFKA_SSL_PASSWORD}
+        ssl.endpoint.identification.algorithm=
+        EOF
+
+        BOOTSTRAP="kafka-1:9093"
+
+        create_topic() {
+          local NAME=$$1
+          local PARTITIONS=$$2
+          echo "→ Ensuring topic $$NAME exists (partitions=$$PARTITIONS)"
+          kafka-topics --bootstrap-server $$BOOTSTRAP \
+            --command-config /tmp/client.properties \
+            --create --if-not-exists \
+            --topic $$NAME \
+            --partitions $$PARTITIONS \
+            --replication-factor 3 \
+            --config min.insync.replicas=2
+        }
+
+        create_topic flight.departures        6
+        create_topic flight.statistics        3
+        create_topic flight.departed_flights  3
+
+        echo "All topics ensured. Listing:"
+        kafka-topics --bootstrap-server $$BOOTSTRAP \
+          --command-config /tmp/client.properties --list
+
+        echo "kafka-init done."
+    networks:
+      - flight-net
+    restart: "no"
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
