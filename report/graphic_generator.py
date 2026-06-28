@@ -180,7 +180,7 @@ with dot.subgraph(name="cluster_pollers") as c:
 # Docker network cluster
 # ---------------------------------------------------------------------------
 with dot.subgraph(name="cluster_docker") as c:
-    c.attr(label="DOCKER NETWORK  (flight-net)",
+    c.attr(label="DOCKER NETWORK",
            style="dashed,rounded", color="gray30", fontsize="10")
 
     # API gateway

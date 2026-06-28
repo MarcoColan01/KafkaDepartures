@@ -158,6 +158,43 @@ def build_notification(event: dict) -> dict | None:
         "scheduled_departure": sched,
         "actual_departure": actual,
         "delay_minutes": delay,
+        "kind": "departed",
+        "text": text,
+        "alert_day_utc": datetime.now(timezone.utc).date().isoformat(),
+        "ts": time.time(),
+    }
+
+def build_cancellation(event: dict) -> dict | None:
+    """Produce a cancellation notification for flight.departed_flights."""
+    flight_code = event.get("flight_code")
+    sched = event.get("scheduled_departure")
+    if not flight_code or not sched:
+        return None
+
+    dest_iata = (event.get("destination_iata") or "").upper()
+    info = IATA_AIRPORTS.get(dest_iata) if dest_iata else None
+    if info and info.get("city"):
+        destination = info["city"]
+    else:
+        destination = (
+            event.get("destination_city")
+            or event.get("destination_name")
+            or dest_iata
+            or "—"
+        )
+
+    text = (
+        f"Flight {flight_code} to {destination} "
+        f"scheduled for {sched}: CANCELLED"
+    )
+
+    return {
+        "airport": event.get("airport"),
+        "flight_code": flight_code,
+        "destination_iata": event.get("destination_iata"),
+        "destination_name": destination,
+        "scheduled_departure": sched,
+        "kind": "cancelled",           
         "text": text,
         "alert_day_utc": datetime.now(timezone.utc).date().isoformat(),
         "ts": time.time(),
@@ -215,17 +252,18 @@ def start_notifier():
                 consumer.commit(message=msg, asynchronous=False)
                 continue
 
-            if event.get("status") != "DEPARTED":
-                # Non-DEPARTED events are ignored, but offset advances
+            status = event.get("status")
+            if status not in ("DEPARTED", "CANCELLED"):
                 consumer.commit(message=msg, asynchronous=False)
                 continue
 
-            dedup_key = (event.get("airport"), event.get("flight_code"), event.get("scheduled_departure"))
+            dedup_key = (event.get("airport"), event.get("flight_code"),
+                        event.get("scheduled_departure"), status)
             if dedup_key in sent_keys:
                 consumer.commit(message=msg, asynchronous=False)
                 continue
 
-            notif = build_notification(event)
+            notif = build_cancellation(event) if status == "CANCELLED" else build_notification(event)
             if notif is None:
                 consumer.commit(message=msg, asynchronous=False)
                 continue

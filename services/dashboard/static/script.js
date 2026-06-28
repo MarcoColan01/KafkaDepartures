@@ -139,13 +139,13 @@ function renderAirport(code, data) {
     const tbody = document.getElementById(`flights-${code}`);
     if (!tbody) return;
     if (!haveData) {
-        tbody.innerHTML = `<tr class="empty"><td colspan="8">Awaiting data…</td></tr>`;
+        tbody.innerHTML = `<tr class="empty"><td colspan="9">Awaiting data…</td></tr>`;
         return;
     }
-    tbody.innerHTML = data.flights.map(f => renderFlightRow(f, meta.tz)).join("");
+    tbody.innerHTML = data.flights.map((f, i) => renderFlightRow(f, meta.tz, i + 1)).join("");
 }
 
-function renderFlightRow(f, tz) {
+function renderFlightRow(f, tz, idx) {
     const sched = formatTime(f.scheduled_departure, tz);
     const estIso = f.estimated_departure || f.actual_departure || f.scheduled_departure;
     const est = formatTime(estIso, tz);
@@ -167,6 +167,7 @@ function renderFlightRow(f, tz) {
 
     return `
         <tr>
+            <td class="row-idx">${idx}</td>
             <td class="airline" title="${escapeHtml(airlineLabel)}">${escapeHtml(airlineLabel)}</td>
             <td class="flight">${escapeHtml(flight)}</td>
             <td class="dest" title="${escapeHtml(f.destination_name_full || dest)}">${escapeHtml(dest)}</td>
@@ -278,9 +279,23 @@ function renderAlerts(airportCode, alertsList) {
 function renderAlertItem(a) {
     const meta = AIRPORT_META[a.airport] || { tz: "UTC" };
     const sched = formatTime(a.scheduled_departure, meta.tz);
-    const actual = formatTime(a.actual_departure, meta.tz);
     const dest = a.destination_name || a.destination_iata || "—";
     const code = a.flight_code || "—";
+
+    // CANCELLED notification: entire row in red, no actual time, no delay badge
+    if (a.kind === "cancelled") {
+        return `
+            <div class="alert-row alert-cancelled">
+                <span class="alert-text">
+                    Flight <strong>${escapeHtml(code)}</strong> to <strong>${escapeHtml(dest)}</strong>
+                    scheduled for <strong>${sched}</strong>: CANCELLED
+                </span>
+            </div>
+        `;
+    }
+
+    // DEPARTED notification (default)
+    const actual = formatTime(a.actual_departure, meta.tz);
     const delay = (typeof a.delay_minutes === "number") ? a.delay_minutes : null;
     let delayBadge = "";
     if (delay != null && delay !== 0) {

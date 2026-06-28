@@ -349,3 +349,17 @@ body {
     padding: 1rem 0.4rem;
     font-size: 0.72rem;
 }
+
+.flights .row-idx {
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    padding-right: 0.4rem;
+    opacity: 0.6;
+    font-size: 0.85em;
+}
+
+.alert-cancelled .alert-text,
+.alert-cancelled .alert-text strong {
+    color: #f87171;
+}
