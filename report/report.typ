@@ -10,7 +10,7 @@
 
 #show: it => basic-report(
   doc-category: "Final project for the Cloud Computing Technologies course (2025/26 academic year)",
-  doc-title: "KakfaDepartures: a Real-Time Cloud-Native departure dashboard for three European airports (Amsterdam-Schiphol, Helsinki-Vantaa & Oslo-Gardermoen",
+  doc-title: "KakfaDepartures: a Real-Time Cloud-Native departure dashboard for three European airports (Amsterdam-Schiphol, Helsinki-Vantaa & Oslo-Gardermoen)",
   author: "Marco Colangelo (67045A)",
   affiliation: "Università degli Studi di Milano, Dipartimento di Informatica \"Giovanni degli Antoni\" ",
   language: "en",
@@ -26,7 +26,13 @@ This project implements a Cloud-Native architecture for *real-time flight depart
 In this project, Kafka is the single source of truth for all derived state. The main focus is to guarantee three non-functional properties: *fault tolerance, load balancing and transport-layer security.*
 
 = System Architecture
-The infrastructure follows a decoupled *microservice* pattern with all communication mediated by Apache Kafka. The cluster runs in KRaft mode with three brokers acting both as data nodes and as members of the metadata quorum.
+The infrastructure follows a decoupled *microservice* pattern with all communication mediated by Apache Kafka. The cluster runs in KRaft mode with three brokers acting both as data nodes and as members of the metadata quorum. The following image shows the architecture of the system.
+#figure(
+    image("flight_flow_architecture.png", width: 120%),
+    caption: [
+        Figure 1: The system architecture.
+    ]
+)
 
 
 = System Description
@@ -56,4 +62,36 @@ All internal services (brokers, kafka-ui, API-producer, stats-aggregator, notifi
   - Dashboard uses a randomly generated Group ID (each instance forms its own group), implementing a broadcasting pattern suited for real-time visualization, where every replica must see every event. 
 - *Security:* all internal communication is encrypted via mTLS (Mutual TLS). Each broker holds a *PKCS12* keystore with its RSA certificate and a truststore with the CA certificate. Each Python microservice carries a *PEM-encoded* certificate-key pair signed by the internal CA `FlightFlowCA`. Both parties verify each other during the TLS handshake. Validation experiments with a rogue producer confirmed rejection at the transport layer of three distinct attacks (plain TCP, TLS without client cert, TLS with non-CA-signed cert). Packet capture on the broker port confirmed the wire payload is fully encrypted, with no application string readable.
 
-= Application Showcases
+= Running Application
+
+#figure(
+    image(
+        "dashboard_1.png", width: 120%),
+        caption: [
+            Figure 2: Dashboard without notifications and stats.
+        ]
+)
+
+#figure(
+    image(
+        "dashboard_2.png", width: 120%),
+        caption: [
+            Figure 3: Dashboard with some notifications and stats.
+        ]
+)
+
+#figure(
+    image(
+        "kafkaui_1.png", width: 120%),
+        caption: [
+            Figure 4: KafkaUI: example of load balancing on flight.departures topic.
+        ]
+)
+
+#figure(
+    image(
+        "kafkaui_2.png", width: 120%),
+        caption: [
+            Figure 5: KafkaUI: example of fault tolerance on flight.departures topic.
+        ]
+)
